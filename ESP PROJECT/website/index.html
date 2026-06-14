@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Station</title>
+    <!-- Modern Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Firebase App (the core Firebase SDK) -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <!-- Firebase Realtime Database -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --temp-color: #f43f5e;
+            --temp-color-glow: rgba(239, 68, 68, 0.4);
+            --hum-color: #3b82f6;
+            --hum-color-glow: rgba(59, 130, 246, 0.4);
+            --aqi-color: #8b5cf6;
+            --aqi-color-glow: rgba(139, 92, 246, 0.4);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Outfit', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            position: relative;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 2rem 0;
+        }
+
+        /* Background Animation */
+        .background-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .blob {
+            position: absolute;
+            filter: blur(80px);
+            border-radius: 50%;
+            opacity: 0.4;
+            animation: float 10s infinite ease-in-out alternate;
+        }
+
+        .blob-1 {
+            width: 400px;
+            height: 400px;
+            background: var(--temp-color);
+            top: -100px;
+            left: -100px;
+        }
+
+        .blob-2 {
+            width: 500px;
+            height: 500px;
+            background: var(--hum-color);
+            bottom: -150px;
+            right: -100px;
+            animation-delay: -5s;
+        }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            100% { transform: translate(50px, 50px) scale(1.1); }
+        }
+
+        /* Main Container */
+        .container {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 1100px;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 3rem;
+            font-weight: 800;
+            letter-spacing: -1px;
+            margin-bottom: 0.5rem;
+        }
+
+        header h1 span {
+            background: linear-gradient(to right, #fbbf24, #f59e0b);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        /* Dashboard Cards */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 2.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .temp-card:hover {
+            box-shadow: 0 10px 40px var(--temp-color-glow);
+        }
+
+        .hum-card:hover {
+            box-shadow: 0 10px 40px var(--hum-color-glow);
+        }
+
+        .aqi-card:hover {
+            box-shadow: 0 10px 40px var(--aqi-color-glow);
+        }
+
+        .outdoor-card:hover { box-shadow: 0 10px 40px rgba(59, 130, 246, 0.4); }
+        .dew-card:hover { box-shadow: 0 10px 40px rgba(16, 185, 129, 0.4); }
+
+        .card-icon {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .temp-card .card-icon { color: var(--temp-color); }
+        .hum-card .card-icon { color: var(--hum-color); }
+        .aqi-card .card-icon { color: var(--aqi-color); }
+        .outdoor-card .card-icon { color: #3b82f6; }
+        .dew-card .card-icon { color: #10b981; }
+
+        .card h2 {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+        }
+
+        .value-container {
+            display: flex;
+            align-items: baseline;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .value {
+            font-size: 4.5rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .unit {
+            font-size: 1.5rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        /* Progress/Status Bars */
+        .status-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .fill {
+            height: 100%;
+            border-radius: 4px;
+            width: 0%;
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .temp-fill { background: var(--temp-color); }
+        .hum-fill { background: var(--hum-color); }
+        .aqi-fill { background: var(--aqi-color); transition: background-color 0.5s ease; }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .status {
+            color: #10b981;
+            font-size: 0.9rem;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .status.offline {
+            color: #ef4444;
+            background: rgba(239, 68, 68, 0.1);
+        }
+
+        .reset-btn {
+            background: rgba(239, 68, 68, 0.1);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s ease;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+        }
+        .reset-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+        }
+
+        .feels-card:hover {
+            box-shadow: 0 10px 40px var(--temp-color-glow);
+        }
+        
+        .status-banners {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .comfort-banner {
+            flex: 1;
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        .status-good { color: #10b981; background: rgba(16, 185, 129, 0.1); }
+        .status-dry { color: #f59e0b; background: rgba(245, 158, 11, 0.1); }
+        .status-humid { color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
+        .status-hot { color: #ef4444; background: rgba(239, 68, 68, 0.1); }
+        .status-cold { color: #0ea5e9; background: rgba(14, 165, 233, 0.1); }
+
+        .smart-banner {
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: 600;
+            padding: 1rem;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .minmax-stats {
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            background: rgba(0,0,0,0.2);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+        }
+        .minmax-stats b { color: var(--text-main); }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        @keyframes dataUpdatePulse {
+            0% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.1); filter: brightness(1.5); color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.5); }
+            100% { transform: scale(1); filter: brightness(1); }
+        }
+        .update-pulse {
+            animation: dataUpdatePulse 0.4s ease-out;
+            display: inline-block;
+        }
+
+        @media (max-width: 600px) {
+            .container { padding: 1rem; }
+            header h1 { font-size: 2.2rem; }
+            .card { padding: 1.5rem; }
+            .value { font-size: 3.5rem; }
+            .status-banners { flex-direction: column; gap: 0.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="background-animation">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+    </div>
+
+    <div class="container">
+        <header>
+            <h1>Weather <span>Station</span></h1>
+            <p>Real-time Data from ESP8266 & DHT11</p>
+        </header>
+
+        <div class="status-banners">
+            <div class="comfort-banner" id="temp-status"><strong>Temperature:</strong> Analyzing...</div>
+            <div class="comfort-banner" id="hum-status"><strong>Humidity:</strong> Analyzing...</div>
+            <div class="comfort-banner" id="aqi-status"><strong>Air Quality:</strong> Fetching...</div>
+        </div>
+
+        <div class="smart-banner" id="smart-banner">
+            <strong>💡 AI Recommendation:</strong> Waiting for sensor data...
+        </div>
+
+        <main class="dashboard">
+            <!-- Temperature Card -->
+            <div class="card temp-card">
+                <div class="card-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
+                    </svg>
+                </div>
+                <div class="card-header">
+                    <h2 style="margin-bottom: 0;">Temperature</h2>
+                    <span id="esp-timer-temp" style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Update in 10s</span>
+                </div>
+                <div class="value-container">
+                    <span id="temp-value" class="value">--</span>
+                    <span class="unit">°C</span>
+                </div>
+                <div class="status-bar">
+                    <div class="fill temp-fill" id="temp-fill"></div>
+                </div>
+                <div class="minmax-stats">
+                    <span>Min: <b id="temp-min">--</b></span>
+                    <span>Max: <b id="temp-max">--</b></span>
+                </div>
+            </div>
+
+            <!-- Humidity Card -->
+            <div class="card hum-card">
+                <div class="card-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                    </svg>
+                </div>
+                <div class="card-header">
+                    <h2 style="margin-bottom: 0;">Humidity</h2>
+                    <span id="esp-timer-hum" style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Update in 10s</span>
+                </div>
+                <div class="value-container">
+                    <span id="hum-value" class="value">--</span>
+                    <span class="unit">%</span>
+                </div>
+                <div class="status-bar">
+                    <div class="fill hum-fill" id="hum-fill"></div>
+                </div>
+                <div class="minmax-stats">
+                    <span>Min: <b id="hum-min">--</b></span>
+                    <span>Max: <b id="hum-max">--</b></span>
+                </div>
+            </div>
+
+            <!-- Feels Like Card -->
+            <div class="card feels-card">
+                <div class="card-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"></circle>
+                        <line x1="12" y1="1" x2="12" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="23"></line>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                        <line x1="1" y1="12" x2="3" y2="12"></line>
+                        <line x1="21" y1="12" x2="23" y2="12"></line>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                    </svg>
+                </div>
+                <h2>Feels Like</h2>
+                <div class="value-container">
+                    <span id="feels-value" class="value">--</span>
+                    <span class="unit">°C</span>
+                </div>
+                <div class="status-bar">
+                    <div class="fill temp-fill" id="feels-fill"></div>
+                </div>
+            </div>
+
+            <!-- Air Quality Card -->
+            <div class="card aqi-card">
+                <div class="card-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path>
+                    </svg>
+                </div>
+                <div class="card-header">
+                    <h2 id="aqi-title" style="margin-bottom: 0;">Air Quality (Rajagiri Valley)</h2>
+                    <div style="display: flex; gap: 0.75rem; align-items: center;">
+                        <span id="api-timer" style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Next update in 15:00</span>
+                        <button id="locate-btn" class="reset-btn" style="padding: 0.25rem 0.5rem; font-size: 0.8rem; margin: 0;">📍 Locate Me</button>
+                    </div>
+                </div>
+                <div class="value-container">
+                    <span id="aqi-value" class="value">--</span>
+                    <span class="unit">AQI</span>
+                </div>
+                <div class="status-bar">
+                    <div class="fill aqi-fill" id="aqi-fill"></div>
+                </div>
+            </div>
+
+            <!-- Outdoor Temp Card -->
+            <div class="card outdoor-card">
+                <div class="card-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"></path>
+                        <path d="M12 4v4"></path>
+                        <path d="M3 21h18"></path>
+                    </svg>
+                </div>
+                <h2 id="outdoor-title">Outdoor Weather</h2>
+                <div class="value-container">
+                    <span id="outdoor-value" class="value">--</span>
+                    <span class="unit">°C</span>
+                </div>
+                <div class="status-bar">
+                    <div class="fill hum-fill" id="outdoor-fill"></div>
+                </div>
+            </div>
+
+            <!-- Dew Point Card -->
+            <div class="card dew-card">
+                <div class="card-icon">
+                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                        <path d="M12 2v2"></path>
+                        <path d="M12 20v2"></path>
+                    </svg>
+                </div>
+                <h2>Dew Point</h2>
+                <div class="value-container">
+                    <span id="dew-value" class="value">--</span>
+                    <span class="unit">°C</span>
+                </div>
+                <div class="status-bar">
+                    <div class="fill temp-fill" id="dew-fill"></div>
+                </div>
+                <div class="card-status" id="mold-status">Analyzing...</div>
+            </div>
+            
+            <!-- Graph Card -->
+            <div class="card graph-card" style="grid-column: 1 / -1; width: 100%;">
+                <h2>Live History</h2>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="historyChart"></canvas>
+                </div>
+            </div>
+        </main>
+        
+        <footer>
+            <div class="status" id="connection-status">Connecting to Firebase...</div>
+            <div style="margin-top: 0.5rem; color: var(--text-muted); font-size: 0.85rem;" id="last-seen-text">Last seen: --:--:--</div>
+            <div style="margin-top: 1.5rem;">
+                <button id="reset-btn" class="reset-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                        <path d="M3 3v5h5"></path>
+                    </svg>
+                    Reset Data
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // ==========================================
+        // 1. REPLACE THESE WITH YOUR FIREBASE CONFIG
+        // ==========================================
+        // Go to Firebase Console -> Project Settings -> General -> Your Apps -> Firebase SDK snippet -> Config
+        const firebaseConfig = {
+            apiKey: "AIzaSyAd6VVyvOS9XBhlxy3mc_0OO-hrODnVjn4",
+            authDomain: "roommonitor-69a5f.firebaseapp.com",
+            databaseURL: "https://roommonitor-69a5f-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "roommonitor-69a5f",
+            storageBucket: "roommonitor-69a5f.firebasestorage.app",
+            messagingSenderId: "570912712114",
+            appId: "1:570912712114:web:09df70e69d5fde7007f0ab"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // UI Elements
+        const tempValue = document.getElementById('temp-value');
+        const tempFill = document.getElementById('temp-fill');
+        const humValue = document.getElementById('hum-value');
+        const humFill = document.getElementById('hum-fill');
+        const statusEl = document.getElementById('connection-status');
+        const lastSeenEl = document.getElementById('last-seen-text');
+
+        const tempRef = database.ref('sensor/temperature');
+        const humRef = database.ref('sensor/humidity');
+        const timeRef = database.ref('sensor/last_updated');
+        
+        // Reference to the sensor history in Firebase Realtime DB (limit to 20 points)
+        const historyRef = database.ref('sensor/history').limitToLast(20);
+
+        function playUpdateAnimation(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) {
+                el.classList.remove('update-pulse');
+                void el.offsetWidth; // trigger reflow to reset animation
+                el.classList.add('update-pulse');
+            }
+        }
+
+        let offlineTimeout;
+
+        function resetOfflineTimer(timeStr) {
+            if (offlineTimeout) clearTimeout(offlineTimeout);
+            statusEl.textContent = '🟢 Live • Connected';
+            statusEl.classList.remove('offline');
+            if (timeStr) lastSeenEl.textContent = 'Last seen: ' + timeStr;
+
+            // If no data received for 15 seconds, show red signal
+            offlineTimeout = setTimeout(() => {
+                statusEl.textContent = '🔴 Offline • No Data Received';
+                statusEl.classList.add('offline');
+            }, 15000);
+        }
+
+        // Initialize Chart.js
+        const ctx = document.getElementById('historyChart').getContext('2d');
+        const historyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [], // Time labels
+                datasets: [
+                    {
+                        label: 'Temperature (°C)',
+                        borderColor: '#f43f5e',
+                        backgroundColor: 'rgba(244, 63, 94, 0.1)',
+                        data: [],
+                        tension: 0.4,
+                        fill: true
+                    },
+                    {
+                        label: 'Humidity (%)',
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        data: [],
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                color: '#94a3b8',
+                scales: {
+                    x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                    y: { 
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        min: 10,
+                        max: 40,
+                        ticks: { color: '#94a3b8' }, 
+                        grid: { color: 'rgba(255,255,255,0.05)' } 
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        min: 20,
+                        max: 90,
+                        ticks: { color: '#94a3b8' }, 
+                        grid: { drawOnChartArea: false }
+                    }
+                },
+                plugins: {
+                    legend: { labels: { color: '#f8fafc' } }
+                }
+            }
+        });
+
+        let sessionMinTemp = 999, sessionMaxTemp = -999;
+        let sessionMinHum = 999, sessionMaxHum = -999;
+        let espSeconds = 10;
+
+        // Listen for History Updates in Real-time
+        historyRef.on('value', (snapshot) => {
+            espSeconds = 10; // reset ESP timer on fresh data
+            const data = snapshot.val();
+            
+            // Clear the chart arrays regardless of whether there is data
+            historyChart.data.labels = [];
+            historyChart.data.datasets[0].data = [];
+            historyChart.data.datasets[1].data = [];
+
+            if (!data) {
+                // Database is empty (Reset was clicked)
+                historyChart.update();
+                sessionMinTemp = 999; sessionMaxTemp = -999;
+                sessionMinHum = 999; sessionMaxHum = -999;
+                
+                document.getElementById('temp-value').textContent = '--';
+                document.getElementById('hum-value').textContent = '--';
+                document.getElementById('feels-value').textContent = '--';
+                document.getElementById('dew-value').textContent = '--';
+                
+                document.getElementById('temp-fill').style.width = '0%';
+                document.getElementById('hum-fill').style.width = '0%';
+                document.getElementById('feels-fill').style.width = '0%';
+                document.getElementById('dew-fill').style.width = '0%';
+                
+                document.getElementById('temp-min').textContent = '--';
+                document.getElementById('temp-max').textContent = '--';
+                document.getElementById('hum-min').textContent = '--';
+                document.getElementById('hum-max').textContent = '--';
+                
+                document.getElementById('smart-banner').innerHTML = "<strong>💡 AI Recommendation:</strong> Waiting for sensor data...";
+                document.getElementById('mold-status').innerHTML = "Waiting for data...";
+                return;
+            }
+            
+            let latestTemp = 0;
+            let latestHum = 0;
+            let latestTimeStr = "";
+            
+            // snapshot.forEach guarantees chronological order
+                snapshot.forEach((childSnapshot) => {
+                    const record = childSnapshot.val();
+                    if (!record || !record.timestamp) return;
+
+                    const date = new Date(record.timestamp);
+                    const timeStr = date.toLocaleTimeString();
+                    
+                    historyChart.data.labels.push(timeStr);
+                    historyChart.data.datasets[0].data.push(record.temp);
+                    historyChart.data.datasets[1].data.push(record.hum);
+                    
+                    latestTemp = record.temp;
+                    latestHum = record.hum;
+                    latestTimeStr = timeStr;
+
+                    if (record.temp < sessionMinTemp) sessionMinTemp = record.temp;
+                    if (record.temp > sessionMaxTemp) sessionMaxTemp = record.temp;
+                    if (record.hum < sessionMinHum) sessionMinHum = record.hum;
+                    if (record.hum > sessionMaxHum) sessionMaxHum = record.hum;
+                });
+
+                historyChart.update();
+                
+                if (latestTimeStr !== "") {
+                    // Update the current UI values
+                    tempValue.textContent = parseFloat(latestTemp).toFixed(1);
+                    playUpdateAnimation('temp-value');
+                    let tempPercentage = (latestTemp / 50) * 100;
+                    tempPercentage = Math.max(0, Math.min(100, tempPercentage));
+                    tempFill.style.width = `${tempPercentage}%`;
+
+                    humValue.textContent = parseFloat(latestHum).toFixed(1);
+                    playUpdateAnimation('hum-value');
+                    let humPercentage = Math.max(0, Math.min(100, latestHum));
+                    humFill.style.width = `${humPercentage}%`;
+
+                    // Update MinMax UI
+                    document.getElementById('temp-min').textContent = sessionMinTemp.toFixed(1) + '°';
+                    document.getElementById('temp-max').textContent = sessionMaxTemp.toFixed(1) + '°';
+                    document.getElementById('hum-min').textContent = sessionMinHum.toFixed(1) + '%';
+                    document.getElementById('hum-max').textContent = sessionMaxHum.toFixed(1) + '%';
+
+                    // Calculate Heat Index
+                    const e = (latestHum / 100) * 6.105 * Math.exp(17.27 * latestTemp / (237.7 + latestTemp));
+                    const feelsLike = latestTemp + 0.33 * e - 4.00;
+                    document.getElementById('feels-value').textContent = feelsLike.toFixed(1);
+                    let feelsPercentage = (feelsLike / 50) * 100;
+                    document.getElementById('feels-fill').style.width = `${Math.max(0, Math.min(100, feelsPercentage))}%`;
+
+                    // Calculate Dew Point (Magnus formula)
+                    const T = latestTemp;
+                    const RH = latestHum;
+                    const alpha = Math.log(RH / 100) + (17.625 * T) / (243.04 + T);
+                    const dewPoint = (243.04 * alpha) / (17.625 - alpha);
+                    document.getElementById('dew-value').textContent = dewPoint.toFixed(1);
+                    document.getElementById('dew-fill').style.width = `${Math.max(0, Math.min(100, (dewPoint/50)*100))}%`;
+
+                    const moldStatus = document.getElementById('mold-status');
+                    moldStatus.className = 'card-status';
+                    if (RH > 70) {
+                        moldStatus.innerHTML = "⚠️ High Mold Risk!";
+                        moldStatus.classList.add('status-hot');
+                    } else if (RH > 60) {
+                        moldStatus.innerHTML = "👀 Moderate Mold Risk";
+                        moldStatus.classList.add('status-dry');
+                    } else {
+                        moldStatus.innerHTML = "✨ No Mold Risk";
+                        moldStatus.classList.add('status-good');
+                    }
+                    
+                    window.lastIndoorTemp = latestTemp;
+                    updateSmartRecommendation();
+
+                    // Temperature Status
+                    const tempStatus = document.getElementById('temp-status');
+                    tempStatus.className = 'comfort-banner';
+                    if (latestTemp < 20) {
+                        tempStatus.innerHTML = "<strong>Temperature:</strong> ❄️ A bit chilly!";
+                        tempStatus.classList.add('status-cold');
+                    } else if (latestTemp > 30) {
+                        tempStatus.innerHTML = "<strong>Temperature:</strong> 🔥 Too Hot!";
+                        tempStatus.classList.add('status-hot');
+                    } else {
+                        tempStatus.innerHTML = "<strong>Temperature:</strong> ✨ Perfect";
+                        tempStatus.classList.add('status-good');
+                    }
+
+                    // Humidity Status
+                    const humStatus = document.getElementById('hum-status');
+                    humStatus.className = 'comfort-banner';
+                    if (latestHum < 30) {
+                        humStatus.innerHTML = "<strong>Humidity:</strong> 🌵 Too Dry";
+                        humStatus.classList.add('status-dry');
+                    } else if (latestHum > 60) {
+                        humStatus.innerHTML = "<strong>Humidity:</strong> 💧 Too Humid";
+                        humStatus.classList.add('status-humid');
+                    } else {
+                        humStatus.innerHTML = "<strong>Humidity:</strong> ✨ Perfect";
+                        humStatus.classList.add('status-good');
+                    }
+
+                    // Reset the offline timer with the latest time
+                    resetOfflineTimer(latestTimeStr);
+                }
+        });
+
+        // Handle Reset Button
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            if(confirm("Are you sure you want to delete all historical graph data?")) {
+                database.ref('sensor/history').remove();
+            }
+        });
+
+        let currentLat = 9.993205;
+        let currentLon = 76.358357;
+        let currentLocName = "Rajagiri Valley";
+
+        window.lastIndoorTemp = null;
+        window.lastOutdoorTemp = null;
+        window.lastAqi = null;
+
+        function updateSmartRecommendation() {
+            const banner = document.getElementById('smart-banner');
+            const inTemp = window.lastIndoorTemp;
+            const outTemp = window.lastOutdoorTemp;
+            const aqi = window.lastAqi;
+            
+            if (inTemp === null || outTemp === null || aqi === null) return;
+            
+            let msg = "✨ Everything looks good! Relax and enjoy your room.";
+            
+            if (aqi > 100) {
+                msg = "☠️ Air Quality is unhealthy outside! Keep your windows tightly closed.";
+            } else if (inTemp > 28 && outTemp < inTemp) {
+                msg = "🌬️ It's cooler outside right now. Open a window to cool down your room!";
+            } else if (inTemp > 28 && outTemp >= inTemp) {
+                msg = "🔥 It's hot both inside and outside. Keep windows closed and turn on the AC/Fan!";
+            } else if (inTemp < 20 && outTemp > inTemp) {
+                msg = "☀️ It's warmer outside. Open a window to warm up your room naturally!";
+            }
+            
+            banner.innerHTML = `<strong>💡 AI Recommendation:</strong> ${msg}`;
+        }
+
+        // Fetch Air Quality
+        async function fetchAirQuality(lat = currentLat, lon = currentLon, locName = currentLocName) {
+            try {
+                currentLat = lat; currentLon = lon; currentLocName = locName;
+                document.getElementById('aqi-title').textContent = `Air Quality (${locName})`;
+
+                const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                const aqi = data.current.us_aqi;
+                document.getElementById('aqi-value').textContent = aqi;
+                
+                const aqiFill = document.getElementById('aqi-fill');
+                const aqiStatus = document.getElementById('aqi-status');
+                
+                let fillPercent = (aqi / 300) * 100;
+                aqiFill.style.width = `${Math.min(100, fillPercent)}%`;
+                
+                // Fetch Weather (Outdoor Temp)
+                const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m`;
+                const weatherRes = await fetch(weatherUrl);
+                const weatherData = await weatherRes.json();
+                const outdoorTemp = weatherData.current.temperature_2m;
+                
+                document.getElementById('outdoor-title').textContent = `Outdoor Weather (${locName})`;
+                document.getElementById('outdoor-value').textContent = outdoorTemp;
+                document.getElementById('outdoor-fill').style.width = `${Math.min(100, Math.max(0, (outdoorTemp/50)*100))}%`;
+                
+                window.lastOutdoorTemp = outdoorTemp;
+                window.lastAqi = aqi;
+                updateSmartRecommendation();
+                
+                aqiStatus.className = 'comfort-banner'; // reset classes
+                if (aqi <= 50) {
+                    aqiStatus.innerHTML = `<strong>Air Quality Index:</strong> 🍃 Good (${aqi})`;
+                    aqiStatus.classList.add('status-good');
+                    aqiFill.style.background = "#10b981";
+                } else if (aqi <= 100) {
+                    aqiStatus.innerHTML = `<strong>Air Quality Index:</strong> 🟡 Moderate (${aqi})`;
+                    aqiStatus.classList.add('status-dry');
+                    aqiFill.style.background = "#f59e0b";
+                } else if (aqi <= 150) {
+                    aqiStatus.innerHTML = `<strong>Air Quality Index:</strong> 🟠 Unhealthy for Sensitive Groups (${aqi})`;
+                    aqiStatus.style.background = "rgba(249, 115, 22, 0.1)";
+                    aqiStatus.style.color = "#f97316";
+                    aqiFill.style.background = "#f97316";
+                } else if (aqi <= 200) {
+                    aqiStatus.innerHTML = `<strong>Air Quality Index:</strong> 🔴 Unhealthy (${aqi})`;
+                    aqiStatus.classList.add('status-hot');
+                    aqiFill.style.background = "#ef4444";
+                } else {
+                    aqiStatus.innerHTML = `<strong>Air Quality Index:</strong> ☠️ Hazardous (${aqi})`;
+                    aqiStatus.style.background = "rgba(139, 92, 246, 0.1)";
+                    aqiStatus.style.color = "#8b5cf6";
+                    aqiFill.style.background = "#8b5cf6";
+                }
+                
+            } catch (error) {
+                console.error("Error fetching AQI:", error);
+                document.getElementById('aqi-status').innerHTML = "<strong>Air Quality:</strong> Failed to load";
+            }
+        }
+        
+        let secondsUntilNextFetch = 15 * 60; // 15 minutes
+
+        function updateTimers() {
+            // API Timer
+            if (secondsUntilNextFetch <= 0) {
+                document.getElementById('api-timer').textContent = "Updating...";
+                fetchAirQuality(currentLat, currentLon, currentLocName);
+                secondsUntilNextFetch = 15 * 60;
+            } else {
+                const m = Math.floor(secondsUntilNextFetch / 60);
+                const s = secondsUntilNextFetch % 60;
+                document.getElementById('api-timer').textContent = `Next update in ${m}:${s.toString().padStart(2, '0')}`;
+                secondsUntilNextFetch--;
+            }
+            
+            // ESP Timer
+            if (espSeconds <= 0) {
+                document.getElementById('esp-timer-temp').textContent = "Waiting for data...";
+                document.getElementById('esp-timer-hum').textContent = "Waiting for data...";
+            } else {
+                document.getElementById('esp-timer-temp').textContent = `Update in ${espSeconds}s`;
+                document.getElementById('esp-timer-hum').textContent = `Update in ${espSeconds}s`;
+                espSeconds--;
+            }
+        }
+
+        // Fetch AQI on load and start countdown timer
+        fetchAirQuality();
+        setInterval(updateTimers, 1000);
+
+        // Handle Geolocation Button
+        document.getElementById('locate-btn').addEventListener('click', () => {
+            if (navigator.geolocation) {
+                const btn = document.getElementById('locate-btn');
+                btn.textContent = "📍 Locating...";
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        
+                        // Reverse Geocode to get City/Town name
+                        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                let locName = "Your Location";
+                                if (data && data.address) {
+                                    locName = data.address.city || data.address.town || data.address.village || data.address.suburb || data.address.county || "Your Location";
+                                }
+                                fetchAirQuality(lat, lon, locName).then(() => {
+                                    btn.textContent = "📍 Locate Me";
+                                    secondsUntilNextFetch = 15 * 60; // Reset timer on manual fetch
+                                });
+                            })
+                            .catch(err => {
+                                console.error("Geocoding error:", err);
+                                fetchAirQuality(lat, lon, "Your Location").then(() => {
+                                    btn.textContent = "📍 Locate Me";
+                                    secondsUntilNextFetch = 15 * 60; // Reset timer on manual fetch
+                                });
+                            });
+                    },
+                    (error) => {
+                        console.error("Geolocation error:", error);
+                        alert("Unable to retrieve your location. Please ensure location permissions are granted in your browser.");
+                        btn.textContent = "📍 Locate Me";
+                    }
+                );
+            } else {
+                alert("Geolocation is not supported by your browser.");
+            }
+        });
+    </script>
+</body>
+</html>
