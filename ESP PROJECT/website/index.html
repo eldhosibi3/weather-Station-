@@ -52,14 +52,11 @@
 
         /* Background Animation */
         .background-animation {
-            position: fixed;
-            top: 0;
-            left: 0;
+            position: absolute;
             width: 100vw;
             height: 100vh;
             z-index: 0;
             overflow: hidden;
-            pointer-events: none;
         }
 
         .blob {
@@ -317,16 +314,6 @@
         }
         .minmax-stats b { color: var(--text-main); }
 
-        .card-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-            margin-bottom: 1rem;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-        }
-
         @keyframes dataUpdatePulse {
             0% { transform: scale(1); filter: brightness(1); }
             50% { transform: scale(1.1); filter: brightness(1.5); color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.5); }
@@ -338,7 +325,6 @@
         }
 
         @media (max-width: 600px) {
-            .container { padding: 1rem; }
             header h1 { font-size: 2.2rem; }
             .card { padding: 1.5rem; }
             .value { font-size: 3.5rem; }
@@ -376,7 +362,7 @@
                         <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
                     </svg>
                 </div>
-                <div class="card-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 1rem;">
                     <h2 style="margin-bottom: 0;">Temperature</h2>
                     <span id="esp-timer-temp" style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Update in 10s</span>
                 </div>
@@ -400,7 +386,7 @@
                         <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                     </svg>
                 </div>
-                <div class="card-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 1rem;">
                     <h2 style="margin-bottom: 0;">Humidity</h2>
                     <span id="esp-timer-hum" style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Update in 10s</span>
                 </div>
@@ -449,7 +435,7 @@
                         <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"></path>
                     </svg>
                 </div>
-                <div class="card-header">
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 1rem;">
                     <h2 id="aqi-title" style="margin-bottom: 0;">Air Quality (Rajagiri Valley)</h2>
                     <div style="display: flex; gap: 0.75rem; align-items: center;">
                         <span id="api-timer" style="font-size: 0.8rem; color: #94a3b8; font-weight: 600;">Next update in 15:00</span>
@@ -662,24 +648,10 @@
                 historyChart.update();
                 sessionMinTemp = 999; sessionMaxTemp = -999;
                 sessionMinHum = 999; sessionMaxHum = -999;
-                
-                document.getElementById('temp-value').textContent = '--';
-                document.getElementById('hum-value').textContent = '--';
-                document.getElementById('feels-value').textContent = '--';
-                document.getElementById('dew-value').textContent = '--';
-                
-                document.getElementById('temp-fill').style.width = '0%';
-                document.getElementById('hum-fill').style.width = '0%';
-                document.getElementById('feels-fill').style.width = '0%';
-                document.getElementById('dew-fill').style.width = '0%';
-                
                 document.getElementById('temp-min').textContent = '--';
                 document.getElementById('temp-max').textContent = '--';
                 document.getElementById('hum-min').textContent = '--';
                 document.getElementById('hum-max').textContent = '--';
-                
-                document.getElementById('smart-banner').innerHTML = "<strong>💡 AI Recommendation:</strong> Waiting for sensor data...";
-                document.getElementById('mold-status').innerHTML = "Waiting for data...";
                 return;
             }
             
